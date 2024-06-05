@@ -107,3 +107,10 @@ generating lots of lines of the type
         /foo {bar} def
 ```
 which define what's shown on the page.
+
+EXTRA NOTES
+-----------
+
+Some of the new features require the Courier 10 Pitch BT font. You can
+retrieve it from
+<https://github.com/thiagoeramos/redtape/blob/master/resources/_fonts/Courier%2010%20Pitch%20BT.ttf>
