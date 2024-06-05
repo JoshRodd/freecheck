@@ -7,6 +7,7 @@
 #
 #    Copyright (C) 2000 Eric Sandeen <sandeen-freecheck@sandeen.net>
 #    Copyright (C) 2002 James Klicman <james@klicman.org>
+#    Copyright (C) 2024 Josh Rodd <josh@rodd.us>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -23,8 +24,12 @@
 #    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 #---------------
+#
+#    This contains portions of code from Artifex Ghostscript, which
+#    is licensed under the Affero GNU Public License version 3. Use
+#    of this code may bind you to the obligations of the AGPL.
 
-$version = "0.30.1";
+$version = "0.4.0";
 $systemConfigFile = "/etc/freecheck/freecheck.cfg";
 $ConfigFile = $ENV{"HOME"} . "/.freecheck.cfg";
 
@@ -101,6 +106,12 @@ if ( ! -e $ConfigFile ) {
 		LogoPadding		{value}
 		LogoBorder		{value}
 		LogoBBox		[value]
+		BankLogoFile		(value)
+		BankLogoWidth		{value}
+		BankLogoHeight		{value}
+		BankLogoPadding		{value}
+		BankLogoBorder		{value}
+		BankLogoBBox		[value]
 		# Check Blank Types
 		CheckHeight		{value}
 		CheckWidth		{value}
@@ -114,11 +125,11 @@ if ( ! -e $ConfigFile ) {
 			
 # Parse command line options and deal with them:
 
-GetOptions	("account:s",	# Account definition file 
+GetOptions	("account:s",	# Account definition file
 		"checknum:i",	# Check number optional (overrides acct file)
 		"pages:i",	# Number of pages to print
 		"checkstyle:s",	# Check style (defaults to "normal_style.ps"
-		"checktype:s",  # Check blank definition 
+		"checktype:s",  # Check blank definition
 		"nomicr",       # Prevents MICR line from printing (body only)
 		"nobody",	# Prevents body from printing (MICR line only)
 		"showaccounts",	# Show available accounts
@@ -151,7 +162,7 @@ Get_Sections();
 # cannot be found, die.
 if (!$global_found) {
 	die ("No [Global] section found in config file\n");
-} 
+}
 
 if ($accounts !~ /${opt_account}/i) {
 	die ("Account $opt_account not found in config file\n");
@@ -345,6 +356,31 @@ if (defined $Definitions{'LogoFile'}) {
     }
 }
 
+if (defined $Definitions{'BankLogoFile'}) {
+    if (open(EPS,"<$Definitions{'BankLogoFile'}")) {
+        my $foundbbox = 0;
+        while (<EPS>) {
+            break if /^%%EndComments/;
+            next unless s/^%%((?:HiRes)?BoundingBox):\s*//;
+            my $hires = ($1 eq 'HiResBoundingBox');
+            $foundbbox = 1;
+            if (/^(\d+(?:\.\d+)?(?:\s+\d+(?:\.\d+)?){3})\s*(?:%.*)?$/) {
+                $Definitions{'BankLogoBBox'} = $1;
+            } else {
+                $error .= "Error - Can't parse EPS Logo BoundingBox comment\n";
+            }
+            # keep looking until HiResBoundingBox or EndComments
+            break if $hires;
+        }
+        close(EPS);
+
+        unless ($foundbbox) {
+            $error .= "Error - Required EPS Logo BoundingBox not found\n";
+        }
+    } else {
+        $error .= "Error - Can't open LogoFile $Definitions{'BankLogoFile'}: $!\n";
+    }
+}
 
 # die() if we got errors
 if ( $error && !$opt_test ) {
@@ -367,6 +403,227 @@ __END_OF_POSTSCRIPT__
 # Go through $Definitions and print them out PostScript-Like
 Print_Defs();
 
+if (defined $Definitions{'BankLogoFile'}) {
+    my $filesize = (stat($Definitions{'BankLogoFile'}))[7];
+    print <<"__END_OF_POSTSCRIPT__";
+%%BeginProcSet: banklogo
+%%Creator: Josh Rodd <josh\@rodd.us>
+%%CreationDate: June 2024
+%%Version: 0.4
+
+% if
+/BankLogoPadding where
+{
+    pop % discard dict
+}
+% else
+{
+    /BankLogoPadding 0 def
+}
+ifelse
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Calculate BankLogoMatrix
+%
+% BankLogoXScale
+BankLogoWidth BankLogoPadding 2 mul sub
+% BankBBWidth
+    BankLogoBBox 2 get % x2
+    BankLogoBBox 0 get % x1
+    sub % x2 x1 sub
+div % BankLogoWidth BankBBWidth div
+% BankLogoYScale
+BankLogoHeight BankLogoPadding 2 mul sub
+% BBHeight
+    BankLogoBBox 3 get % y2
+    BankLogoBBox 1 get % y1
+    sub % y2 y1 sub
+div % BankLogoHeight BankBBHeight div
+
+% if
+2 copy lt % BankLogoXScale BankLogoYScale lt
+{
+    pop % discard BankLogoYScale
+}
+% else
+{
+    exch pop % discard BankLogoXScale
+}
+ifelse
+% ^ (BankLogoXScale < BankLogoYScale ? BankLogoXScale : BankLogoYScale)
+dup matrix scale /BankLogoMatrix exch def
+
+/DrawBankLogo {
+    /BankLogoForm where {
+        pop % discard dict
+        gsave
+
+        % Don't draw a border for the bank logo.
+        % /BankLogoBorder where {
+        %     pop % discard dict
+        %     newpath
+        %     LeftMargin BankLogoBorder 2 div add
+        %     CheckHeight TopMargin sub BankLogoBorder 2 div sub  moveto
+
+        %     BankLogoWidth BankLogoBorder sub 0 rlineto
+        %     0 BankLogoHeight BankLogoBorder sub neg rlineto
+        %     BankLogoWidth BankLogoBorder sub neg 0 rlineto
+        %     closepath
+        %     BankLogoBorder setlinewidth stroke
+        % } if
+
+        % Logo is placed in front of the bank info on the check
+        LeftMargin CheckHeight BankInfoHeight mul TopMargin add translate
+
+        BankLogoForm /BBox get aload pop % ^ llx lly urx ury
+
+        % translate top-left corner of BankLogoBBox to current point
+        % ^ llx lly urx ury
+        3 index neg % llx neg  ^ llx lly urx ury -llx
+        1 index neg % ury neg  ^ llx lly urx ury -llx -ury
+        BankLogoForm /Matrix get
+        transform % -llx -ury BankLogoMatrix transform
+        translate % transformedX transformedY translate
+
+        % calculate real width and height of BankLogoBBox
+        % ^ llx lly urx ury
+        exch      % ^ llx lly ury urx
+        4 -1 roll % ^ lly ury urx llx
+        sub % urx llx sub ^ lly ury urx-llx
+        3 -2 roll % ^ urx-llx lly ury 
+        exch      % ^ urx-llx ury lly 
+        sub % ury lly sub 
+        % ^ urx-llx ury-lly
+        BankLogoForm /Matrix get
+        transform % urx-llx ury-lly BankLogoMatrix transform
+        % ^ RealBankLogoWidth RealBankLogoHeight
+
+        % Calculate difference of RealBankLogoWidth, RealBankLogoHeight
+        % and BankLogoWidth, BankLogoHeight for centering logo.
+        exch BankLogoWidth exch sub 2 div
+        exch BankLogoHeight exch sub 2 div neg
+        translate % BankLogoHAlign BankLogoVAlign translate
+        0 inch 0 inch translate
+
+        BankLogoForm execform
+
+        grestore
+    } if
+} def
+%%EndProcSet
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%
+% The following EPS Form handling code is based on code contained in
+% Adobe Technical Note #5144 Using EPS Files in PostScript Language Forms.
+%
+
+%%BeginResource: procset forms_ops 1.0 0
+%%Title: (Forms Operators)
+%%Version: 1.0
+userdict /forms_ops 10 dict dup begin put
+
+/StartEPSF { % prepare for EPSF inclusion
+    userdict begin
+    /PreEPS_state save def
+    /dict_stack countdictstack def
+    /ops_count count 1 sub def
+    /showpage {} def
+} bind def
+
+/EPSFCleanUp { % clean up after EPSF inclusion
+    count ops_count sub {pop} repeat
+    countdictstack dict_stack sub {end} repeat
+    PreEPS_state restore
+    end % userdict
+} bind def
+
+/STRING_SIZE 16000 def % Best value to not fragment printer's VM
+% recommended ARRAY_SIZE = filesize/16000 + 2
+% +2 resulted in errors
+% +3 worked
+/ARRAY_SIZE $filesize 16000 idiv 3 add def
+
+% for initial counter and final empty string.
+/buffer STRING_SIZE string def
+/inputFile currentfile 0 (% EOD_Marker_$$) /SubFileDecode filter def
+
+/readdata { % array readdata --
+    1 { % put counter on stack
+        % stack: array counter
+        2 copy % stack: array counter array counter
+        inputFile buffer readstring % read contents of currentfile into buffer
+        % stack: array counter array counter string boolean
+        4 1 roll % put boolean indicating EOF lower on stack
+        STRING_SIZE string copy % copy buffer string into new string
+        % stack: array counter boolean array counter newstring
+        put % put string into array
+        not {exit} if % if EOF has been reached, exit loop.
+        1 add % increment counter
+    } loop
+    % increment counter and place empty string in next position
+    1 add 2 copy () put pop
+    currentglobal true setglobal exch
+    0 1 array put % create an array for counter in global VM,
+    % so as not to be affected by save/restore calls in EPS file.
+    % place as first element of string array.
+    setglobal % restore previously set value
+} bind def
+currentdict readonly pop end
+%%EndResource
+%%EndProlog
+%%BeginSetup
+% set MaxFormItem to be equivalent to MaxFormCache
+<< /MaxFormItem currentsystemparams /MaxFormCache get >> setuserparams
+% make forms procset available
+forms_ops begin
+userdict begin
+% download form resource
+%%BeginResource: form BankLogoForm
+/BankLogoForm
+    10 dict begin
+        /FormType 1 def
+        /EPSArray ARRAY_SIZE array def
+        /AcquisitionProc {
+            EPSArray dup 0 get dup 0 get % array counter_array counter
+            dup 3 1 roll % array counter counter_array counter
+            1 add 0 exch put % increment counter
+            get % use old counter as index into array, placing
+            % next string on operand stack.
+        } bind def
+        /PaintProc {
+            begin
+                StartEPSF
+                % May want to translate here, prior to executing EPS
+                EPSArray 0 get 0 1 put
+                //AcquisitionProc 0 () /SubFileDecode filter
+                cvx exec
+                EPSFCleanUp
+            end
+        } bind def
+        /Matrix //BankLogoMatrix def
+        /BBox //BankLogoBBox def
+        currentdict
+    end
+def % BankLogoForm
+BankLogoForm /EPSArray get
+readdata
+%%BeginDocument: ($Definitions{'BankLogoFile'})
+__END_OF_POSTSCRIPT__
+
+    open(EPS, "<$Definitions{'BankLogoFile'}") || die "can't open bank logo file: $!\n";
+    print while (<EPS>);
+    close(EPS);
+
+	print <<"__END_OF_POSTSCRIPT__";
+%%EndDocument
+% EOD_Marker_$$
+%%EndResource
+%%EndSetup
+__END_OF_POSTSCRIPT__
+}
 
 if (defined $Definitions{'LogoFile'}) {
     my $filesize = (stat($Definitions{'LogoFile'}))[7];
@@ -424,18 +681,19 @@ dup matrix scale /LogoMatrix exch def
         pop % discard dict
         gsave
 
-        /LogoBorder where {
-            pop % discard dict
-            newpath
-            LeftMargin LogoBorder 2 div add
-            CheckHeight TopMargin sub LogoBorder 2 div sub  moveto
+        % Don't draw a border for the logo anymore.
+        % /LogoBorder where {
+        %     pop % discard dict
+        %     newpath
+        %     LeftMargin LogoBorder 2 div add
+        %     CheckHeight TopMargin sub LogoBorder 2 div sub  moveto
 
-            LogoWidth LogoBorder sub 0 rlineto
-            0 LogoHeight LogoBorder sub neg rlineto
-            LogoWidth LogoBorder sub neg 0 rlineto
-            closepath
-            LogoBorder setlinewidth stroke
-        } if
+        %     LogoWidth LogoBorder sub 0 rlineto
+        %     0 LogoHeight LogoBorder sub neg rlineto
+        %     LogoWidth LogoBorder sub neg 0 rlineto
+        %     closepath
+        %     LogoBorder setlinewidth stroke
+        % } if
         
 
         % Logo is placed at the top-left corner of the check
@@ -470,7 +728,7 @@ dup matrix scale /LogoMatrix exch def
         exch LogoHeight exch sub 2 div neg
         translate % LogoHAlign LogoVAlign translate
 
-        LogoForm execform
+        % LogoForm execform
 
         grestore
     } if
@@ -925,8 +1183,10 @@ __END__
 	2.5 inch 0 inch rlineto
 	-2.5 inch 0 inch rmoveto
 	0 2 rmoveto
-	(for) show
+	(Memo) show
 } def
+
+/center 
 
 /DrawSignatureLine { % Expects height of signature line
 		 % and right edge of check for
@@ -936,6 +1196,8 @@ __END__
 	RightMargin neg 0 rmoveto
 	-2.5 inch 0 rmoveto
 	2.5 inch 0 inch rlineto
+	-1.25 inch -0.15 inch rmoveto
+	(Authorized Signature) centeralign show
 
 } def
 
@@ -988,12 +1250,28 @@ __END__
 
 /DrawDateLine {
 	0.6 CheckWidth mul DateLineHeight CheckHeight mul moveto
-	(Date) show
+    % Don't print the word "date".
+	% (Date) show
 	1 inch 0 rlineto
 } def
 
 /DrawBankInfo {
 	LeftMargin BankInfoHeight CheckHeight mul moveto
+
+    % make room for Logo if specified
+    /BankLogoForm where {
+        pop % discard dict
+        BankLogoWidth
+        /BankLogoBorder where {
+            pop % discard dict
+            BankLogoBorder 2 div add
+        } if
+        /BankLogoPadding where {
+            pop % discard dict
+            BankLogoPadding 2 div add
+        } if
+        0 rmoveto
+    } if
 
 	StandardFontSize BankName ShowAndCR
 
@@ -1110,7 +1388,8 @@ __END__
 	DrawCheckNumber
 	DrawFraction
 	DrawDateLine
-    /DrawLogo where { pop DrawLogo } if
+	/DrawLogo where { pop DrawLogo } if
+	/DrawBankLogo where { pop DrawBankLogo } if
 	DrawStub
 } def
 
@@ -1615,6 +1894,7 @@ __END__
     DrawQCheckNumberAndFraction
     DrawQStub
     /DrawLogo where { pop DrawLogo } if
+    /DrawBankLogo where { pop DrawBankLogo } if
 } def
 
 /DrawQStandardCheckBody {
