@@ -48,9 +48,9 @@ if you prefer.
 CONFIGURATION
 -------------
 
-On first run the program will copy the system default configuration file to
-your home directory. From there you can edit it with your accounts and any
-custom check styles or layouts.
+Copy the `freecheck.cfg` file to your home directory. If it doesn't exist,
+it will try to use one in the current directory. You can then edit it with
+your accounts and any custom check styles or layouts.
 
 Edit the file `~/.freecheck.cfg` to add your account information, and define
 any new check blanks or styles you want.  Take a look at the [Global]
