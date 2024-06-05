@@ -10,6 +10,7 @@ Version 0.4.0, June 5, 2024
         % ported `freecheck` from Perl to Python
         % removed old CGI program
         % updated documentation
+        + freecheck.py: freecheck.cfg is now TOML-format, freecheck.toml
 
 Version 0.30.1, March 11, 2O14
         + packaged for Archlinux
