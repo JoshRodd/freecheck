@@ -7,6 +7,7 @@ import os
 import sys
 import argparse
 import tomllib
+import re
 from pprint import pprint
 
 freecheck_version = "0.4.0"
@@ -48,7 +49,6 @@ class FreeCheckPrinterMain():
         ap.add_argument("--showstyles", help="Show available check styles", action="store_true")
         ap.add_argument("--showblanks", help="Show available check blanks", action="store_true")
         ap.add_argument("--test", help="Don't increment check n, and print VOID", action="store_true")
-        ap.add_argument("--cgi", type=str, help="Accept configuration string from another script")
         ap.add_argument("--conf", type=argparse.FileType("rb"), help=f"Change configuration file; default is '{default_config_file}'", default=default_config_file)
         fcp = FreeCheckPrinter()
         fcp.set_args(ap.parse_args())
@@ -61,8 +61,36 @@ class FreeCheckPrinterMain():
             print(f"Error in configuration file:\n{e}", file=sys.stderr)
         if fcp.show_options():
             return
+        fcp.set_format()
 
 class FreeCheckPrinter():
+    @staticmethod check_routing_number(micr, fraction):
+        # First 4 figits is routing symbol and next 4 digits is institution number.
+        routing_number = micr[1:10]
+        routing_symbol = routing_number[0:4]
+        institution = routing_number[4:8]
+        # Remove up to one leading zero from the routing symbol.
+        routing_symbol = re.sub(r'^0', '', routing_symbol)
+        # Remove one or more leading zeroes from the institution number.
+        institution = re.sub(r'^0+', '', institution)
+        # Expected format is "any two digits-institution number/routing symbol".
+        expected_fraction = f"-{institution}/{routing_symbol}"
+        if fraction[2:] != expected_fraction:
+            raise ValueError(f"For the routing number '{routing_number}', the expected routing fraction was '##{expected_fraction}' (where ## is any two numbers), but the configured one was '{fraction}'.")
+
+        if len(micr) != 11:
+            raise ValueError("The routing number MICR should be exactly 11 characters long; 9 digits with an 'R' at start end.")
+        if micr[0] != 'R' or micr[-1:]:
+            raise ValueError("The routing number MICR must start and with 'R's.")
+
+        cksum = 0
+        weights = [3, 7, 1, 3, 7, 1, 3, 7]
+        for i in range(0, 8):
+            cksum = cksum + weights[i] * int(routing_number[i:i + 1])
+        cksum = (10 - (chksum % 10)) % 10
+        if cksum != int(micr[8:9]):
+            raise ValueError(f"The routing number '{routing_number}' has an invalid checksum and is not correct.")
+
     def set_args(self, args):
         self.args = args
 
@@ -88,160 +116,58 @@ class FreeCheckPrinter():
             print("Check Types:")
             print("\n".join(['\t' + k for k in self.conf['Style']]))
 
+    def load_format(self, d):
+        if not hasattr(self, 'format'):
+            self.format = {}
+        for k, v in d.items():
+            self.format[k] = v
 
-## Show list of available sections, if requested
-#if ($opt_showaccounts || $opt_showstyles || $opt_showblanks) {
-#	print "\nFreeCheck v$version\n";
-#	if ($opt_showaccounts) {
-#		print "Accounts:\n";
-#		foreach (split(/\s+/,$accounts)) {
-#			print "\t$_\n";
-#		}
-#	}
-#	if ($opt_showstyles) {
-#		print "Check Styles:\n";
-#		foreach (split(/\s+/,$checkstyles)) {
-#			print "\t$_\n";
-#		}
-#	}
-#	if ($opt_showblanks) {
-#		print "Check Types:\n";
-#		foreach (split(/\s+/,$checkblanks)) {
-#			print "\t$_\n";
-#		}
-#	}
-#	die("\n");
-#}
-#
-## Go through the config and fill up a hash with PostScript defines...
-#Parse_Config($config_file);
-#
-## Overwrite anything we got from the config file with what was on the
-## Command Line (if anything...)
-#
-#if ($opt_checknum) {
-#	$Definitions{"CheckNumber"} = $opt_checknum;
-#}
-#
-#if ($opt_pages) {
-#	$Definitions{"NumPages"} = $opt_pages;
-#}
-#
-#if ($opt_nomicr) {
-#	$Definitions{"PrintMICRLine"} = "false";
-#}
-#
-#if ($opt_nobody) {
-#	$Definitions{"PrintCheckBody"} = "false";
-#}
-#
-## This probably isn't in the config file (although it might be...)
-## so cover both possibilites (true/false)
-#if ($opt_test) {
-#	$Definitions{"PrintVOID"} = "true";
-#} else {
-#	$Definitions{"PrintVOID"} = "false";
-#}
-#
-## the --cgi option lets us pass in name value pairs in a string.
-## This will overwrite anything we got from the config file, or
-## from the other command line options (--cgi has the last word)
-## Parse as follows:
-## name is the first word, everything following it is the value
-## each line contains one name/value pair.
-#
-#while ( $opt_cgi =~ /(^\w+)\s+?(.*$)/mcg ) {
-#	$Definitions{$1} = $2;
-#}
-#
-###################
-## Error Checking #
-###################
-#
-#$error = "";
-#
-## Make sure that MICR line is only numbers and symbols
-#
-#if ( $Definitions{"Routing"} !~ /^R[0-9]+R$/ ) {
-#	$error = $error . "Error - Routing number must be numeric, with an \"R\" on each end\n";
-#}
-#
-#if ( $Definitions{"AuxOnUs"} !~ /^[0-9\-CPS]*$/ ) {
-#	$error = $error . "Error - Auxiliary On-Us field may only be numeric, with \"-\", and MICR symbols (C,P,S)\n";
-#}
-#
-#if ( $Definitions{"OnUs"} !~ /^[0-9\-CPS]+$/ ) {
-#	$error = $error . "Error - On-Us field may only be numeric, with \"-\", and MICR symbols (C,P,S)\n";
-#}
-#
-#if ( $Definitions{"CheckNumber"} !~ /^[0-9]+$/ ) {
-#	$error = $error . "Error - Check number must be numeric \n";
-#}
-#
-#if ( $Definitions{"NumPages"} !~ /^[0-9]+$/ ) {
-#	$error = $error . "Error - Number of pages must be numeric\n";
-#}
-#
-#if ( $Definitions{"Fraction"} !~ /^[0-9]{2}\s*\-\s*[0-9]{1,4}\s*\/\s*[0-9]{3,4}$/ ) {
-#	$error = $error . "Error - Routing fraction must be numeric, with a \"-\" in the numerator\n";
-#}
-#
-#if ($Definitions{'CheckLayout'} !~ /^(Original|QStandard|QWallet)$/) {
-#    $error .= "Error - CheckLayout must be Original, QStandard or QWallet\n";
-#}
-#
-## Get routing symbol and institution number from routing number
-#$RoutingSymbol = substr($Definitions{"Routing"},1,4);
-#$Institution = substr($Definitions{"Routing"},5,4);
-#
-## Strip any leading zeros...
-## Only should be one on routing...
-#$RoutingSymbol =~ s/^0//;
-## One or more on institution
-##$Institution =~ s/^0+//;
-#
-## Fraction format:
-##
-## 2 digits, a "-", institution number (no leading zeros)
-## ------------------------------------------------------
-## routing number (no leading zeros)
-#
-#
-#if ( $Definitions{"Fraction"} !~ /^[0-9]{2}\-${Institution}\/${RoutingSymbol}$/ ) {
-#	$error = $error . "Error - Routing fraction does not match routing number\n";
-#}
-#
-#
-## Test the MICR line for correctness 
-#if ( length ($Definitions{"Routing"}) != 11 ) {
-#	$error = $error . "Error - Routing number must be exactly 9 digits long, with
-#				an \"R\" on each end\n";
-#}
-#
-## Test the MICR checksum
-## Don't forget the real routing number is sandwiched between "Rs"
-#
-#unless ( ( $Definitions{"Routing"} !~ /^R[0-9]+R$/) || ( length ($Definitions{"Routing"}) != 11 ) ){
-#
-#	$CheckSum = 0;
-#
-#	@CheckSumMults = (3, 7, 1, 3, 7, 1, 3, 7);
-#	for ($Digit = 1; $Digit < 9; $Digit++) {
-#		$CheckSum = $CheckSum +
-#			$CheckSumMults[$Digit-1] * substr($Definitions{"Routing"}, $Digit, 1);
-#	}
-#	
-#	$CheckSum = 10 - ($CheckSum % 10);
-#
-#	# Kludge alert...
-#	if ($CheckSum == 10) {
-#		$CheckSum = 0;
-#	}
-#
-#	if ( $CheckSum ne substr($Definitions{"Routing"}, 9, 1) ) {
-#		$error = $error . "Error - Routing Number Checksum Incorrect\n";
-#	}
-#}
+    def set_format(self):
+        for x in [
+            self.conf['Global'],
+            self.conf['Account'][self.conf.account],
+            self.conf['CheckBlank'][self.conf.checktype],
+            self.conf['Style'][self.conf.checkstyle]
+        ]:
+            self.load_format(x)
+
+        if self.args.checknum:
+            self.format['CheckNumber'] = self.args.checknum
+
+        if self.args.pages:
+            self.format['NumPages'] = self.args.pages
+
+        if self.args.nomicr:
+            self.format['PrintMICRLine'] = "false"
+
+        if self.args.nobody:
+            self.format['PrintCheckBody'] = "false"
+
+        if self.args.test:
+            self.format['PrintVOID'] = "true"
+        else:
+            self.format['PrintVOID'] = "false"
+
+        if not re.match(r"R[0-9]+R", self.format['Routing']):
+            raise ValueError("Error: routing number must be numeric, with an 'R' on each end.")
+
+        if not re.match(r"[0-9\-CPS]*", self.format['AuxOnUs']):
+            raise ValueError("Error: auxiliary on-us field may only be numbers, '-', or MICR symbols 'C', 'P', and 'S'.")
+
+        if not re.match(r"[0-9]+", self.format['CheckNumber']):
+            raise ValueError("Error: check number must be numeric")
+
+        if not re.match(r"[0-9]+", self.format['NumPages']):
+            raise ValueError("Error: number of pages must be numeric")
+
+        if not re.match(r"[0-9]{2}\s*\-\s*[0-9]{1,4}\s*\/\s*[0-9]{3,4}", self.format['Fraction']):
+            raise ValueError("Error: routing fraction must be numeric and have a '-' in the numerator")
+
+        if self.format['CheckLayout'] not in ['Original', 'QStandard', 'QWallet']:
+            raise ValueError("Error: check layout must be 'Original', 'QStandard', or 'QWallet'")
+
+        self.check_routing_number(self.format['Routing'], self.format['Fraction'])
+
 #
 #if (defined $Definitions{'LogoFile'}) {
 #    if (open(EPS,"<$Definitions{'LogoFile'}")) {
