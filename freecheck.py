@@ -26,6 +26,8 @@ default_config_file = os.path.expanduser("~/.freecheck.toml")
 # Formats have been moved to postscript_data.ps
 
 formats_filename = "freecheck_formats.ps"
+header_filename = "freecheck_header.ps"
+program_filename = "freecheck_program.ps"
 
 # Parse command line options and deal with them:
 
@@ -62,6 +64,8 @@ class FreeCheckPrinterMain():
         if fcp.show_options():
             return
         fcp.set_format()
+        ps_data = fcp.generate_postscript()
+        print('\n'.join(ps_data))
 
 class FreeCheckPrinter():
     @staticmethod
@@ -81,15 +85,16 @@ class FreeCheckPrinter():
 
         if len(micr) != 11:
             raise ValueError("The routing number MICR should be exactly 11 characters long; 9 digits with an 'R' at start end.")
-        if micr[0] != 'R' or micr[-1:]:
-            raise ValueError("The routing number MICR must start and with 'R's.")
+        if micr[0] != 'R' or micr[-1:] != 'R':
+            raise ValueError("The routing number MICR must start and end with 'R's.")
 
         cksum = 0
         weights = [3, 7, 1, 3, 7, 1, 3, 7]
         for i in range(0, 8):
             cksum = cksum + weights[i] * int(routing_number[i:i + 1])
-        cksum = (10 - (chksum % 10)) % 10
-        if cksum != int(micr[8:9]):
+        cksum = 10 - (cksum % 10)
+        cksum = cksum % 10
+        if cksum != int(routing_number[8:9]):
             raise ValueError(f"The routing number '{routing_number}' has an invalid checksum and is not correct.")
 
     def set_args(self, args):
@@ -126,9 +131,9 @@ class FreeCheckPrinter():
     def set_format(self):
         for x in [
             self.conf['Global'],
-            self.conf['Account'][self.conf.account],
-            self.conf['CheckBlank'][self.conf.checktype],
-            self.conf['Style'][self.conf.checkstyle]
+            self.conf['Account'][self.args.account],
+            self.conf['CheckBlank'][self.args.checktype],
+            self.conf['Style'][self.args.checkstyle]
         ]:
             self.load_format(x)
 
@@ -169,372 +174,59 @@ class FreeCheckPrinter():
 
         self.check_routing_number(self.format['Routing'], self.format['Fraction'])
 
-#
-#if (defined $Definitions{'LogoFile'}) {
-#    if (open(EPS,"<$Definitions{'LogoFile'}")) {
-#        my $foundbbox = 0;
-#        while (<EPS>) {
-#            break if /^%%EndComments/;
-#            next unless s/^%%((?:HiRes)?BoundingBox):\s*//;
-#            my $hires = ($1 eq 'HiResBoundingBox');
-#            $foundbbox = 1;
-#            if (/^(\d+(?:\.\d+)?(?:\s+\d+(?:\.\d+)?){3})\s*(?:%.*)?$/) {
-#                $Definitions{'LogoBBox'} = $1;
-#            } else {
-#                $error .= "Error - Can't parse EPS Logo BoundingBox comment\n";
-#            }
-#            # keep looking until HiResBoundingBox or EndComments
-#            break if $hires;
-#        }
-#        close(EPS);
-#
-#        unless ($foundbbox) {
-#            $error .= "Error - Required EPS Logo BoundingBox not found\n";
-#        }
-#    } else {
-#        $error .= "Error - Can't open LogoFile $Definitions{'LogoFile'}: $!\n";
-#    }
-#}
-#
-#if (defined $Definitions{'BankLogoFile'}) {
-#    if (open(EPS,"<$Definitions{'BankLogoFile'}")) {
-#        my $foundbbox = 0;
-#        while (<EPS>) {
-#            break if /^%%EndComments/;
-#            next unless s/^%%((?:HiRes)?BoundingBox):\s*//;
-#            my $hires = ($1 eq 'HiResBoundingBox');
-#            $foundbbox = 1;
-#            if (/^(\d+(?:\.\d+)?(?:\s+\d+(?:\.\d+)?){3})\s*(?:%.*)?$/) {
-#                $Definitions{'BankLogoBBox'} = $1;
-#            } else {
-#                $error .= "Error - Can't parse EPS Logo BoundingBox comment\n";
-#            }
-#            # keep looking until HiResBoundingBox or EndComments
-#            break if $hires;
-#        }
-#        close(EPS);
-#
-#        unless ($foundbbox) {
-#            $error .= "Error - Required EPS Logo BoundingBox not found\n";
-#        }
-#    } else {
-#        $error .= "Error - Can't open LogoFile $Definitions{'BankLogoFile'}: $!\n";
-#    }
-#}
-#
-## die() if we got errors
-#if ( $error && !$opt_test ) {
-#	print STDERR $error;
-#	die("Errors Encountered\n");
-#}
-#
-## Print PostScript
-#
-## Initial stuff:
+    def generate_postscript(self):
+        lines = []
 
-# Splurt out 'freecheck_program_header.ps' here.
+        with open(header_filename, "rt") as f:
+            lines += [x.rstrip() for x in f]
 
-# Splurt out 'freecheck_formats.ps' here (after substitutions).
+        with open(formats_filename, "rt") as f:
+            lineno = 0
+            for x in f:
+                lineno += 1
+                x = x.rstrip()
+                stripped_x = x.lstrip()
+                if stripped_x == '' or stripped_x[0] == '%':
+                    pass
+                elif stripped_x[0].isalpha:
+                    words = stripped_x.split()
+                    if len(words) != 2:
+                        raise ValueError(f"{formats_filename}:{lineno}: Invalid syntax; definitions must contain exactly 2 words: the definition name and the type.")
+                    if words[0] not in self.format:
+                        # Comment out undefined fields.
+                        if x[0] not in [' ', '\t']:
+                            x = '% ' + x
+                        elif x[0:2] == '  ':
+                            x = '%' + x[1:]
+                        else:
+                            x = '%' + x
+                    else:
+                        stripped = x[0:len(x) - len(stripped_x)] + '/'
+                        # Printable text
+                        if words[1] == '(value)':
+                            # Simplistically escape (, ), and \
+                            answer = self.format[words[0]].replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+                            x = stripped + x[:-6] + answer + x[-1:]
+                        # Reference (usually to a font)
+                        elif words[1] == '/value':
+                            x = stripped + x[:-5] + self.format[words[0]]
+                        # Parameter list (usually a set of coordinates), or
+                        # Subroutine (often just an integer of a size in points or inches)
+                        elif words[1] == '[value]' or words[1] == '{value}':
+                            x = stripped + x[:-6] + self.format[words[0]] + x[-1:]
+                        else:
+                            raise ValueError(f"{formats_filename}:{lineno}: Definition type of 'f{words[1]}' for 'f{words[0]}' is not valid.")
+                        x += " def"
+                else:
+                    raise ValueError(f"{formats_filename}:{lineno}: Invalid syntax; lines must be blank, a comment starting with %, or contain a definition.")
+                lines += [x]
 
-# Logo specific stuff.
-#if (defined $Definitions{'LogoFile'}) {
-#    my $filesize = (stat($Definitions{'LogoFile'}))[7];
-#    print <<"__END_OF_POSTSCRIPT__";
-#%%BeginProcSet: logo
-#%%Creator: James Klicman <james\@klicman.org>
-#%%CreationDate: October 2002
-#%%Version: 0.3
-#
-#% if
-#/LogoPadding where
-#{
-#    pop % discard dict
-#}
-#% else
-#{
-#    /LogoPadding 0 def
-#}
-#ifelse
-#
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#%
-#% Calculate LogoMatrix
-#%
-#% LogoXScale
-#LogoWidth LogoPadding 2 mul sub
-#% BBWidth
-#    LogoBBox 2 get % x2
-#    LogoBBox 0 get % x1
-#    sub % x2 x1 sub
-#div % LogoWidth BBWidth div
-#% LogoYScale
-#LogoHeight LogoPadding 2 mul sub
-#% BBHeight
-#    LogoBBox 3 get % y2
-#    LogoBBox 1 get % y1
-#    sub % y2 y1 sub
-#div % LogoHeight BBHeight div
-#
-#% if
-#2 copy lt % LogoXScale LogoYScale lt
-#{
-#    pop % discard LogoYScale
-#}
-#% else
-#{
-#    exch pop % discard LogoXScale
-#}
-#ifelse
-#% ^ (LogoXScale < LogoYScale ? LogoXScale : LogoYScale)
-#dup matrix scale /LogoMatrix exch def
-#
-#/DrawLogo {
-#    /LogoForm where {
-#        pop % discard dict
-#        gsave
-#
-#        % Don't draw a border for the logo anymore.
-#        % /LogoBorder where {
-#        %     pop % discard dict
-#        %     newpath
-#        %     LeftMargin LogoBorder 2 div add
-#        %     CheckHeight TopMargin sub LogoBorder 2 div sub  moveto
-#
-#        %     LogoWidth LogoBorder sub 0 rlineto
-#        %     0 LogoHeight LogoBorder sub neg rlineto
-#        %     LogoWidth LogoBorder sub neg 0 rlineto
-#        %     closepath
-#        %     LogoBorder setlinewidth stroke
-#        % } if
-#        
-#
-#        % Logo is placed at the top-left corner of the check
-#        LeftMargin  CheckHeight TopMargin sub  translate
-#
-#        LogoForm /BBox get aload pop % ^ llx lly urx ury
-#
-#        % translate top-left corner of LogoBBox to current point
-#        % ^ llx lly urx ury
-#        3 index neg % llx neg  ^ llx lly urx ury -llx
-#        1 index neg % ury neg  ^ llx lly urx ury -llx -ury
-#        LogoForm /Matrix get
-#        transform % -llx -ury LogoMatrix transform
-#        translate % transformedX transformedY translate
-#
-#        % calculate real width and height of LogoBBox
-#        % ^ llx lly urx ury
-#        exch      % ^ llx lly ury urx
-#        4 -1 roll % ^ lly ury urx llx
-#        sub % urx llx sub ^ lly ury urx-llx
-#        3 -2 roll % ^ urx-llx lly ury 
-#        exch      % ^ urx-llx ury lly 
-#        sub % ury lly sub 
-#        % ^ urx-llx ury-lly
-#        LogoForm /Matrix get
-#        transform % urx-llx ury-lly LogoMatrix transform
-#        % ^ RealLogoWidth RealLogoHeight
-#
-#        % Calculate difference of RealLogoWidth, RealLogoHeight
-#        % and LogoWidth, LogoHeight for centering logo.
-#        exch LogoWidth exch sub 2 div
-#        exch LogoHeight exch sub 2 div neg
-#        translate % LogoHAlign LogoVAlign translate
-#
-#        % LogoForm execform
-#
-#        grestore
-#    } if
-#} def
-#%%EndProcSet
-#
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#
-#%
-#% The following EPS Form handling code is based on code contained in
-#% Adobe Technical Note #5144 Using EPS Files in PostScript Language Forms.
-#%
-#
-#%%BeginResource: procset forms_ops 1.0 0
-#%%Title: (Forms Operators)
-#%%Version: 1.0
-#userdict /forms_ops 10 dict dup begin put
-#
-#/StartEPSF { % prepare for EPSF inclusion
-#    userdict begin
-#    /PreEPS_state save def
-#    /dict_stack countdictstack def
-#    /ops_count count 1 sub def
-#    /showpage {} def
-#} bind def
-#
-#/EPSFCleanUp { % clean up after EPSF inclusion
-#    count ops_count sub {pop} repeat
-#    countdictstack dict_stack sub {end} repeat
-#    PreEPS_state restore
-#    end % userdict
-#} bind def
-#
-#/STRING_SIZE 16000 def % Best value to not fragment printer's VM
-#% recommended ARRAY_SIZE = filesize/16000 + 2
-#% +2 resulted in errors
-#% +3 worked
-#/ARRAY_SIZE $filesize 16000 idiv 3 add def
-#
-#% for initial counter and final empty string.
-#/buffer STRING_SIZE string def
-#/inputFile currentfile 0 (% EOD_Marker_$$) /SubFileDecode filter def
-#
-#/readdata { % array readdata --
-#    1 { % put counter on stack
-#        % stack: array counter
-#        2 copy % stack: array counter array counter
-#        inputFile buffer readstring % read contents of currentfile into buffer
-#        % stack: array counter array counter string boolean
-#        4 1 roll % put boolean indicating EOF lower on stack
-#        STRING_SIZE string copy % copy buffer string into new string
-#        % stack: array counter boolean array counter newstring
-#        put % put string into array
-#        not {exit} if % if EOF has been reached, exit loop.
-#        1 add % increment counter
-#    } loop
-#    % increment counter and place empty string in next position
-#    1 add 2 copy () put pop
-#    currentglobal true setglobal exch
-#    0 1 array put % create an array for counter in global VM,
-#    % so as not to be affected by save/restore calls in EPS file.
-#    % place as first element of string array.
-#    setglobal % restore previously set value
-#} bind def
-#currentdict readonly pop end
-#%%EndResource
-#%%EndProlog
-#%%BeginSetup
-#% set MaxFormItem to be equivalent to MaxFormCache
-#<< /MaxFormItem currentsystemparams /MaxFormCache get >> setuserparams
-#% make forms procset available
-#forms_ops begin
-#userdict begin
-#% download form resource
-#%%BeginResource: form LogoForm
-#/LogoForm
-#    10 dict begin
-#        /FormType 1 def
-#        /EPSArray ARRAY_SIZE array def
-#        /AcquisitionProc {
-#            EPSArray dup 0 get dup 0 get % array counter_array counter
-#            dup 3 1 roll % array counter counter_array counter
-#            1 add 0 exch put % increment counter
-#            get % use old counter as index into array, placing
-#            % next string on operand stack.
-#        } bind def
-#        /PaintProc {
-#            begin
-#                StartEPSF
-#                % May want to translate here, prior to executing EPS
-#                EPSArray 0 get 0 1 put
-#                //AcquisitionProc 0 () /SubFileDecode filter
-#                cvx exec
-#                EPSFCleanUp
-#            end
-#        } bind def
-#        /Matrix //LogoMatrix def
-#        /BBox //LogoBBox def
-#        currentdict
-#    end
-#def % LogoForm
-#LogoForm /EPSArray get
-#readdata
-#%%BeginDocument: ($Definitions{'LogoFile'})
-#__END_OF_POSTSCRIPT__
-#
-#    open(EPS, "<$Definitions{'LogoFile'}") || die "can't open logo file: $!\n";
-#    print while (<EPS>);
-#    close(EPS);
-#
-#	print <<"__END_OF_POSTSCRIPT__";
-#%%EndDocument
-#% EOD_Marker_$$
-#%%EndResource
-#%%EndSetup
-#__END_OF_POSTSCRIPT__
-#}
-#
+        with open(program_filename, "rt") as f:
+            lines += [x.rstrip() for x in f]
 
+        lines += ['%%EOF']
 
-## Then print the main body
-#print while (<DATA>);
-#
-#if (defined $Definitions{'LogoFile'}) {
-#print <<"__END_OF_POSTSCRIPT__";
-
-# If there's a logo, print this stuff:
-#end % userdict
-#end % forms_ops
-
-print("%%EOF")
-
-# Don't do the insanity of trying to bump up the check number!
-#
-#
-## Update the config file with the new check number, if it's not just a test
-#if (!$opt_test && !$opt_cgi) {
-#	$next_check_number = $Definitions{"CheckNumber"} 
-#		+ ($Definitions{"NumPages"} * $Definitions{"ChecksPerPage"});
-#
-#	$config_file = Replace_Val($config_file, "Account", $opt_account, 
-#				"CheckNumber", $next_check_number);
-#	write_file ($ENV{"HOME"} . "/.freecheck.cfg", $config_file);
-#}
-#
-################
-## Subroutines #
-################
-#
-## read_file and write_file shamelessly stolen from the File::Slurp module
-## Short enough, and I didn't want to require a non-standard module
-#
-#sub read_file
-#{
-#	my ($file) = @_;
-#
-#	local(*F);
-#	my $r;
-#	my (@r);
-#
-#	open(F, "<$file") || die "open $file: $!";
-#	@r = <F>;
-#	close(F);
-#
-#	return @r if wantarray;
-#	return join("",@r);
-#}
-#
-#sub write_file
-#{
-#	my ($f, @data) = @_;
-#
-#	local(*F);
-#
-#	open(F, ">$f") || die "open >$f: $!";
-#	(print F @data) || die "write $f: $!";
-#	close(F) || die "close $f: $!";
-#	return 1;
-#}
-#
-#sub Replace_Val {
-#	local ($string, $section, $name, $key, $value) = 
-#	      ($_[0],   $_[1],    $_[2], $_[3], $_[4]);
-#	# We want to get "[section name] ... key = value" and replace it
-#	# with the new value.
-#	
-#	# s - "." matches ANYTHING including newline
-#	# m - ^ and $ match after and before any newline
-#	# in this case, ".+?" means the minimum number of <anything> i.e. end
-#	# when we find the first instance of $key after [section name]
-#	$string =~ 
-#	s/(^\[\s*$section\s+$name\s*\].+?^${key}\s*=\s*).*?$/$+$value/smi;
-#	$string;
-#}
+        return lines
 
 if __name__ == "__main__":
     FreeCheckPrinterMain.main()

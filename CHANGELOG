@@ -11,6 +11,8 @@ Version 0.4.0, June 5, 2024
         % removed old CGI program
         % updated documentation
         + freecheck.py: freecheck.cfg is now TOML-format, freecheck.toml
+        % freecheck.py doesn't bump the check number in freecheck.toml
+        - freecheck.py doesn't implement logos yet
 
 Version 0.30.1, March 11, 2O14
         + packaged for Archlinux
