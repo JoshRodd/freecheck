@@ -4,7 +4,16 @@ version = "0.4.0"
 description = "A free check printing utility."
 authors = ["Eric Sandeen <sandeen-freecheck@sandeen.net>", "James Klicman <james@klicman.org>", "Caleb Maclennan <caleb@alerque.com>", "Josh Rodd <josh@rodd.us>"]
 readme = "README.md"
+homepage = "https://github.com/JoshRodd/freecheck",
+license = "AGPL-3.0-or-later",
 packages = [{include = "freecheck"}]
+repository = "https://github.com/JoshRodd/freecheck",
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Printing"
+]
 
 [tool.poetry.dependencies]
 python = "^3.12"
