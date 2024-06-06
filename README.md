@@ -1,6 +1,7 @@
 FreeCheck
 =========
 Version 0.4.0
+
 June 5, 2025
 
 Written by:
@@ -9,12 +10,15 @@ Written by:
 - Caleb Maclennan, <caleb@alerque.com>
 - Josh Rodd, <josh@rodd.us>
 
+
 READ THE "WARNING.md" FILE BEFORE YOU PROCEED!
 ==============================================
+
 
 WHY DID YOU WRITE THIS?
 -----------------------
 I wanted a free alternative to MIPS/VersaCheck. 'nuff said.
+
 
 REQUIREMENTS
 ------------
@@ -45,14 +49,19 @@ INSTALLATION
 There isn't one. You can copy the source distribution somewhere and run it
 if you prefer.
 
+You have a choice of a Python or a Perl program. They are almost identical,
+except the Python program hasn't implemented logos yet. The intent of the
+Python program is to present a module that is easy to use from other
+programs.
+
 CONFIGURATION
 -------------
 
-Copy the `freecheck.cfg` file to your home directory. If it doesn't exist,
+Copy the `freecheck.toml` file to your home directory. If it doesn't exist,
 it will try to use one in the current directory. You can then edit it with
 your accounts and any custom check styles or layouts.
 
-Edit the file `~/.freecheck.cfg` to add your account information, and define
+Edit the file `~/.freecheck.toml` to add your account information, and define
 any new check blanks or styles you want.  Take a look at the [Global]
 section, too, to set things up for your system. Pay close attention
 to the MICR line specification instructions. Most configuration instructions
@@ -65,34 +74,33 @@ must either redirect it to a file, a printer, or a viewer.
 
 So, to print (assuming Linux or macOS CUPS, etc.):
 ```
-./freecheck <options> | ps2pdf - | lpr
+./freecheck.py <options> | ps2pdf - | lpr
 ```
 
 To view:
 ```
-./freecheck.pl <options> | ps2pdf - output.pdf
+./freecheck.py <options> | ps2pdf - output.pdf
 ```
 
 and then open the `output.pdf` file.
 
 To save a file:
 ```
-freecheck.pl <options> | ps2pdf - | mycheckfile.ps
+freecheck.py <options> | ps2pdf - mycheckfile.ps
 ```
 
 If you really want the PostScript output, simply remove the `ps2pdf`
 step.
 
+
 OPTIONS
 -------
-`freecheck` doesn't require any options, unless you want it to do something
+`freecheck.py` doesn't require any options, unless you want it to do something
 useful. By itself, it will print a couple sheets of standard checks
 with a dummy account.
 
-Type `freecheck --help` to see what options are available
+Type `freecheck.py --help` to see what options are available
 
-For now, if you get tired of typing all those command line options, just
-edit the defaults at the top of the main script.
 
 HOW DOES IT WORK?
 -----------------
@@ -107,6 +115,7 @@ generating lots of lines of the type
         /foo {bar} def
 ```
 which define what's shown on the page.
+
 
 EXTRA NOTES
 -----------
