@@ -11,7 +11,7 @@ import tomllib
 from . import FreeCheckPrinter
 
 FREECHECK_VERSION = "0.4.0"
-DEFAULT_CONFIG_FILE = os.path.expanduser("~/.freecheck.toml")
+DEFAULT_CONFIG_FILE = "~/.freecheck.toml"
 
 
 ###
@@ -78,14 +78,15 @@ class FreeCheckPrinterMain:
         )
         ap.add_argument(
             "--test",
-            help="Don't increment check n, and print VOID",
+            help="Print VOID on check",
             action="store_true",
         )
+        default_config_file = os.path.expanduser(DEFAULT_CONFIG_FILE)
         ap.add_argument(
             "--conf",
             type=argparse.FileType("rb"),
-            help=f"Change configuration file; default is '{DEFAULT_CONFIG_FILE}'",
-            default=DEFAULT_CONFIG_FILE,
+            help=f"Change configuration file; default is '{default_config_file}'",
+            default=default_config_file,
         )
         fcp = FreeCheckPrinter()
         fcp.set_args(ap.parse_args())

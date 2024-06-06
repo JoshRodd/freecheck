@@ -6,9 +6,10 @@
 import os
 import tomllib
 import re
-import importlib
+from importlib import resources as impresources
+from . import postscript as postscript_files
 
-default_config_file = os.path.expanduser("~/.freecheck.toml")
+ps_dir = impresources.files(postscript_files)
 
 # This tells us how to format the strings from the cfg file
 # so we can print it as a PostScript definition
@@ -22,9 +23,9 @@ default_config_file = os.path.expanduser("~/.freecheck.toml")
 
 # Formats have been moved to postscript_data.ps
 
-formats_filename = "freecheck_formats.ps"
-header_filename = "freecheck_header.ps"
-program_filename = "freecheck_program.ps"
+formats_filename = ps_dir / "freecheck_formats.ps"
+header_filename = ps_dir / "freecheck_header.ps"
+program_filename = ps_dir / "freecheck_program.ps"
 
 
 class FreeCheckPrinter:
@@ -159,10 +160,10 @@ class FreeCheckPrinter:
     def generate_postscript(self):
         lines = []
 
-        with open(header_filename, "rt") as f:
+        with header_filename.open("rt") as f:
             lines += [x.rstrip() for x in f]
 
-        with open(formats_filename, "rt") as f:
+        with formats_filename.open("rt") as f:
             lineno = 0
             for x in f:
                 lineno += 1
@@ -214,7 +215,7 @@ class FreeCheckPrinter:
                     )
                 lines += [x]
 
-        with open(program_filename, "rt") as f:
+        with program_filename.open("rt") as f:
             lines += [x.rstrip() for x in f]
 
         lines += ["%%EOF"]
