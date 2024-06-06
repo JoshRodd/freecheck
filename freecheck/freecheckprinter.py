@@ -6,6 +6,7 @@
 import os
 import tomllib
 import re
+import importlib
 
 default_config_file = os.path.expanduser("~/.freecheck.toml")
 
