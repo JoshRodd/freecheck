@@ -28,6 +28,9 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-This contains portions of code from Artifex Ghostscript, which
-is licensed under the Affero GNU Public License version 3. Use
-of this code may bind you to the obligations of the AGPL.
+FreeCheck contains portions of code from Artifex Ghostscript,
+which is licensed under the Affero GNU Public License version 3.
+Use of this code may bind you to the obligations of the AGPL.
+The specific code used is the output of enscript but reformulated
+to embedded to generically format plain text as part of a
+PostScript program which is integral to FreeCheck.
