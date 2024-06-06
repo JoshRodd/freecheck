@@ -15,4 +15,6 @@ fi
 pytest &&
 black . &&
 ruff check . &&
+poetry export &&
+poetry export --with test -o test_requirements.txt &&
 poetry build
