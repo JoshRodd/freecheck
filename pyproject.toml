@@ -6,7 +6,7 @@ authors = ["Eric Sandeen <sandeen-freecheck@sandeen.net>", "James Klicman <james
 readme = "README.md"
 homepage = "https://github.com/JoshRodd/freecheck",
 license = "AGPL-3.0-or-later",
-packages = [{include = "freecheck"}]
+packages = [{include = "freecheck"}, from = "lib"]
 repository = "https://github.com/JoshRodd/freecheck",
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -17,6 +17,9 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.12"
+
+[tool.poetry.scripts]
+my_package_cli = "freecheck.FreeCheckPrinterMain:freecheck_run"
 
 
 [build-system]
