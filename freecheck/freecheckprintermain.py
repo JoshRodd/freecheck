@@ -103,5 +103,6 @@ class FreeCheckPrinterMain:
         ps_data = fcp.generate_postscript()
         print("\n".join(ps_data))
 
+
 def freecheck_run():
     FreeCheckPrinterMain.main()
