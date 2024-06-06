@@ -43,6 +43,7 @@ paper.
 The repository at <https://github.com/alerque/gnumicr> contains a usable
 MICR font.
 
+
 INSTALLATION
 ------------
 
@@ -53,6 +54,10 @@ You have a choice of a Python or a Perl program. They are almost identical,
 except the Python program hasn't implemented logos yet. The intent of the
 Python program is to present a module that is easy to use from other
 programs.
+
+You can create a Python package in `dist/` by running `build.sh`. The build
+system is based on Python Poetry.
+
 
 CONFIGURATION
 -------------
@@ -66,6 +71,7 @@ any new check blanks or styles you want.  Take a look at the [Global]
 section, too, to set things up for your system. Pay close attention
 to the MICR line specification instructions. Most configuration instructions
 can be found in this file. If something's too confusing, let me know.
+
 
 USAGE
 -----
