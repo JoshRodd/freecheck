@@ -1,8 +1,13 @@
 #!/bin/bash
 
-brew install ghostscript
+if ! which gs; then
+    brew install ghostscript || exit
+fi
 ./add_fonts.sh
-if [ ! -d .venv/ ]; then python3 -m venv .venv; fi
+if ! which python3; then
+    brew install python3 || exit
+fi
+if [ ! -d .venv/ ]; then python3 -m venv .venv || exit; fi
 . .venv/bin/activate
 python3 -m pip install -r requirements.txt | grep -v '^Requirement already satisfied: '
 python3 -m pip install -r test_requirements.txt | grep -v '^Requirement already satisfied: '
