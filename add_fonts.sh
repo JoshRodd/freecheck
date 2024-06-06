@@ -9,6 +9,9 @@ fontfile='Library/Fonts/Courier 10 Pitch BT.ttf'
 if [ ! -f "$HOME/$fontfile" ]; then
 	echo Please obtain the Courier 10 Pitch BT font and place it in:
 	printf "\t$HOME/$fontfile\n"
+    echo
+    echo It is available from:
+    echo 'https://github.com/thiagoeramos/redtape/blob/master/resources/_fonts/Courier%2010%20Pitch%20BT.ttf'
 	exit 1
 fi
 
