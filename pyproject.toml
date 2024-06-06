@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "freecheck"
+version = "0.4.0"
+description = "A free check printing utility."
+authors = ["Eric Sandeen <sandeen-freecheck@sandeen.net>", "James Klicman <james@klicman.org>", "Caleb Maclennan <caleb@alerque.com>", "Josh Rodd <josh@rodd.us>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
