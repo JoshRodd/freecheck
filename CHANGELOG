@@ -13,6 +13,9 @@ Version 0.4.0, June 5, 2024
         + freecheck.py: freecheck.cfg is now TOML-format, freecheck.toml
         % freecheck.py doesn't bump the check number in freecheck.toml
         - freecheck.py doesn't implement logos yet
+        + end to end tests using PyTest
+        + freecheck Python module for use in other programs
+        + Python Poetry for building and packaging
 
 Version 0.30.1, March 11, 2O14
         + packaged for Archlinux
