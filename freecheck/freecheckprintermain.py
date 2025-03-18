@@ -38,8 +38,8 @@ class FreeCheckPrinterMain:
         ap.add_argument(
             "--account",
             type=str,
-            help="Account definition name; default is 'sample'",
-            default="sample",
+            help="Account definition name; default is 'Sample'",
+            default="Sample",
         )
         ap.add_argument(
             "--checknum", type=int, help="Check number optional (overrides acct file)"

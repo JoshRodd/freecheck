@@ -19,7 +19,7 @@ echo -e '\t'pytest
 echo
 echo For sample output:
 echo
-echo -e '\t'cp freecheck.toml \~
+echo -e '\t'cp freecheck.toml \~/.freecheck.toml
 echo -e '\t'./freecheck.py \| ps2pdf - sample.pdf
 echo
 echo and then open or print the sample.pdf file.
